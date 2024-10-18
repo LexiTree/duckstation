@@ -22,7 +22,11 @@
 #include "fmt/format.h"
 #include "imgui.h"
 #include "shaderc/shaderc.h"
+
+#ifdef ENABLE_VULKAN
 #include "spirv_cross_c.h"
+#endif
+
 #include "xxhash.h"
 
 LOG_CHANNEL(GPUDevice);
@@ -1278,9 +1282,13 @@ static bool s_close_registered = false;
 
 #define ADD_FUNC(F) static decltype(&::F) F;
 SHADERC_FUNCTIONS(ADD_FUNC)
+
+#ifdef ENABLE_VULKAN
 SPIRV_CROSS_FUNCTIONS(ADD_FUNC)
 SPIRV_CROSS_HLSL_FUNCTIONS(ADD_FUNC)
 SPIRV_CROSS_MSL_FUNCTIONS(ADD_FUNC)
+#endif
+
 #undef ADD_FUNC
 
 } // namespace dyn_libs
@@ -1342,6 +1350,7 @@ void dyn_libs::CloseShaderc()
 
 bool dyn_libs::OpenSpirvCross(Error* error)
 {
+#ifdef ENABLE_VULKAN
   if (s_spirv_cross_library.IsOpen())
     return true;
 
@@ -1377,10 +1386,14 @@ bool dyn_libs::OpenSpirvCross(Error* error)
   }
 
   return true;
+#else
+  return false;
+#endif
 }
 
 void dyn_libs::CloseSpirvCross()
 {
+#ifdef ENABLE_VULKAN
 #define UNLOAD_FUNC(F) F = nullptr;
   SPIRV_CROSS_FUNCTIONS(UNLOAD_FUNC)
   SPIRV_CROSS_HLSL_FUNCTIONS(UNLOAD_FUNC)
@@ -1388,6 +1401,7 @@ void dyn_libs::CloseSpirvCross()
 #undef UNLOAD_FUNC
 
   s_spirv_cross_library.Close();
+#endif
 }
 
 void dyn_libs::CloseAll()
@@ -1528,6 +1542,7 @@ bool GPUDevice::TranslateVulkanSpvToLanguage(const std::span<const u8> spirv, GP
   if (!dyn_libs::OpenSpirvCross(error))
     return false;
 
+#ifdef ENABLE_VULKAN
   spvc_context sctx;
   spvc_result sres;
   if ((sres = dyn_libs::spvc_context_create(&sctx)) != SPVC_SUCCESS)
@@ -1787,6 +1802,9 @@ bool GPUDevice::TranslateVulkanSpvToLanguage(const std::span<const u8> spirv, GP
 
   output->assign(out_src, out_src_length);
   return true;
+#else
+  return false;
+#endif
 }
 
 std::unique_ptr<GPUShader> GPUDevice::TranspileAndCreateShaderFromSource(
